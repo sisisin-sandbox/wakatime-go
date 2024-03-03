@@ -1,58 +1,45 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as gcp from '@pulumi/gcp';
-import * as std from '@pulumi/std';
-import { jobPostBody } from './jobConfig';
 const gcpConfig = new pulumi.Config('gcp');
 const project = gcpConfig.require('project');
 const region = gcpConfig.require('region');
 const config = new pulumi.Config();
 const projectNumber = config.require('projectNumber');
 
-const saDownloader = new gcp.serviceaccount.Account('wakatime-downloader', {
-  accountId: 'wakatime-downloader',
-  displayName: 'Wakatime Downloader',
+const saCloudRunDownloader = new gcp.serviceaccount.Account('wakatime-cr-downloader', {
+  accountId: 'wakatime-cr-downloader',
+  displayName: 'Wakatime Downloader for Cloud Run',
 });
+const cloudRunDownloaderRoles = ['roles/storage.admin', 'roles/secretmanager.secretAccessor'];
+applyIAMMember('wakatime-cr-downloader', saCloudRunDownloader, cloudRunDownloaderRoles);
 
-export const wakatimeDownloaderEmail = saDownloader.email;
-
-const downloaderRoles = [
-  'roles/batch.agentReporter',
-  'roles/storage.admin',
-  'roles/logging.logWriter',
-  'roles/secretmanager.secretAccessor',
-];
-downloaderRoles.forEach((role) => {
-  new gcp.projects.IAMMember(`wakatime-downloader-${role}`, {
-    project,
-    role,
-    member: pulumi.interpolate`serviceAccount:${saDownloader.email}`,
-  });
+const saSchedulerInvokeDownloader = new gcp.serviceaccount.Account('wakatime-scheduler-invoker', {
+  accountId: 'wakatime-scheduler-invoker',
+  displayName: 'Wakatime Scheduler Invoke Downloader',
 });
+const schedulerInvokeDownloaderRoles = ['roles/run.invoker'];
+applyIAMMember('wakatime-scheduler-invoker', saSchedulerInvokeDownloader, schedulerInvokeDownloaderRoles);
 
-const saDownloadJobScheduler = new gcp.serviceaccount.Account('wakatime-download-scheduler', {
-  accountId: 'wakatime-download-scheduler',
-  displayName: 'Wakatime Download Job Scheduler',
-});
-const downloadJobSchedulerRoles = ['roles/batch.jobsEditor', 'roles/iam.serviceAccountUser'];
-downloadJobSchedulerRoles.forEach((role) => {
-  new gcp.projects.IAMMember(`wakatime-download-job-scheduler-${role}`, {
-    project,
-    role,
-    member: pulumi.interpolate`serviceAccount:${saDownloadJobScheduler.email}`,
-  });
-});
-
-new gcp.cloudscheduler.Job('wakatime-downloader', {
+const runName = 'wakatime-downloader';
+new gcp.cloudscheduler.Job('wakatime-downloader-cr', {
   schedule: '0 1 * * *', // every day at 1:00
   timeZone: 'Asia/Tokyo',
   httpTarget: {
     httpMethod: 'POST',
-    uri: `https://batch.googleapis.com/v1/projects/${projectNumber}/locations/${region}/jobs`,
-    body: jobPostBody(saDownloader),
+    uri: `https://${region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${projectNumber}/jobs/${runName}:run`,
     headers: { 'Content-Type': 'application/json' },
     oauthToken: {
-      serviceAccountEmail: saDownloadJobScheduler.email,
-      scope: 'https://www.googleapis.com/auth/cloud-platform',
+      serviceAccountEmail: saSchedulerInvokeDownloader.email,
     },
   },
 });
+
+function applyIAMMember(key: string, sa: gcp.serviceaccount.Account, roles: string[]) {
+  roles.forEach((role) => {
+    new gcp.projects.IAMMember(`${key}-${role}`, {
+      project,
+      role,
+      member: pulumi.interpolate`serviceAccount:${sa.email}`,
+    });
+  });
+}

@@ -1,0 +1,37 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  annotations:
+    client.knative.dev/user-image: sisisin/wakatime-go:20240303-122753
+    run.googleapis.com/operation-id: abb2b057-554a-4f9a-bbeb-f0d3ddeefb8d
+  labels:
+    cloud.googleapis.com/location: us-west1
+    run.googleapis.com/lastUpdatedTime: '2024-03-03T07:11:26.021165Z'
+  name: wakatime-downloader
+  namespace: '260114795237'
+spec:
+  template:
+    metadata:
+      annotations:
+        client.knative.dev/user-image: sisisin/wakatime-go:20240303-122753
+        run.googleapis.com/client-name: cloud-console
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      taskCount: 1
+      template:
+        spec:
+          containers:
+          - env:
+            - name: WAKATIME_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: '1'
+                  name: wakatime-wakatime-key
+            image: sisisin/wakatime-go:20240303-174018
+            resources:
+              limits:
+                cpu: 1000m
+                memory: 512Mi
+          maxRetries: 3
+          serviceAccountName: wakatime-cr-downloader@daken-counter-4be99.iam.gserviceaccount.com
+          timeoutSeconds: '600'
