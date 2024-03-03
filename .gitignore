@@ -1,3 +1,4 @@
 .envrc.local
 .idea
 .tmp
+.out

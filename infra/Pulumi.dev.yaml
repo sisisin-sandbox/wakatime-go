@@ -1,0 +1,4 @@
+config:
+  gcp:project: daken-counter-4be99
+  gcp:region: us-west1
+  projectNumber: 260114795237

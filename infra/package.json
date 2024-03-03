@@ -1,0 +1,14 @@
+{
+  "name": "infra",
+  "main": "index.ts",
+  "devDependencies": {
+    "@types/node": "^18",
+    "esno": "^4.0.0",
+    "zx": "^7.2.3"
+  },
+  "dependencies": {
+    "@pulumi/gcp": "^7.0.0",
+    "@pulumi/pulumi": "^3.0.0",
+    "@pulumi/std": "^1.6.2"
+  }
+}

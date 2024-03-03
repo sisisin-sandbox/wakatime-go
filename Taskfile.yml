@@ -1,0 +1,35 @@
+# https://taskfile.dev
+
+version: '3'
+
+
+tasks:
+  build:
+    desc: Build the application
+    cmds:
+      - go build -o .out/main ./src/cmd/downloader
+    silent: false
+    dir: .
+    # env:
+  pulumi-up:
+    desc: pulumi up
+    cmds:
+      - pulumi up
+    interactive: true
+    dir: ./infra
+  pulumi-pre:
+    desc: pulumi preview
+    cmds:
+      - pulumi preview
+    interactive: true
+    dir: ./infra
+  run-job:
+    desc: Run the job
+    cmds:
+      - bash ./job.sh
+    dir: .
+  build-image:
+    desc: build-image
+    cmds:
+      - ./scripts/build_image.sh
+    dir: .

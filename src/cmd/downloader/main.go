@@ -26,25 +26,43 @@ func WithLogger(ctx context.Context) context.Context {
 	return context.WithValue(ctx, loggerKey, logger)
 }
 
+var (
+	targetDateFlag string
+	userIDFlag     string
+)
+
+func initFlags(ctx context.Context) {
+	logger := LoggerFromCtx(ctx)
+	jst, err := time.LoadLocation("Asia/Tokyo")
+	if err != nil {
+		logger.Info("failed to load location", slog.Any("error", err))
+		os.Exit(1)
+	}
+	yesterday := time.Now().In(jst).AddDate(0, 0, -1)
+
+	flag.StringVar(&targetDateFlag, "target-date", yesterday.Format("2006-01-02"), "Target date to process. format: yyyy-mm-dd")
+	flag.StringVar(&userIDFlag, "user-id", defaultUserID, "User ID to process")
+
+	flag.Parse()
+}
+
 func main() {
 	ctx := WithLogger(context.Background())
 	logger := LoggerFromCtx(ctx)
+	initFlags(ctx)
 
-	yesterday := time.Now().AddDate(0, 0, -1)
-	targetDateStr := flag.String("target-date", yesterday.Format("2006-01-02"), "Target date to process. format: yyyy-mm-dd")
-	targetDate, err := time.Parse("2006-01-02", *targetDateStr)
+	targetDate, err := time.Parse("2006-01-02", targetDateFlag)
 	if err != nil {
 		logger.Info("failed to parse target date", slog.Any("error", err))
 		os.Exit(1)
 	}
 
-	userID := flag.String("user-id", defaultUserID, "User ID to process")
 	flag.Parse()
 
-	logger.Info("process start", slog.String("target_date", *targetDateStr))
+	logger.Info("process start", slog.String("target_date", targetDateFlag))
 
 	client := newWakatimeClient(ctx)
-	res, err := client.getProjects(*userID, *targetDateStr)
+	res, err := client.getProjects(userIDFlag, targetDateFlag)
 
 	if err != nil {
 		logger.Info("failed to getProjects", slog.Any("error", err))
@@ -58,13 +76,13 @@ func main() {
 
 	details := make([]map[string]interface{}, 0, len(res.Summary.Data[0].Projects))
 	for _, project := range res.Summary.Data[0].Projects {
-		resp, err := client.getProjectDetails(project.Name, *userID, *targetDateStr)
+		resp, err := client.getProjectDetails(project.Name, userIDFlag, targetDateFlag)
 		if err != nil {
 			logger.Info("failed to getProjectDetails", slog.Group("jsonPayload",
 				slog.Any("error", err),
 				slog.String("project_name", project.Name),
-				slog.String("user_id", *userID),
-				slog.String("target_date", *targetDateStr),
+				slog.String("user_id", userIDFlag),
+				slog.String("target_date", targetDateFlag),
 			))
 			continue
 		}
@@ -74,8 +92,8 @@ func main() {
 			logger.Info("failed to getProjectDetails", slog.Group("jsonPayload",
 				slog.Any("error", err),
 				slog.String("project_name", project.Name),
-				slog.String("user_id", *userID),
-				slog.String("target_date", *targetDateStr),
+				slog.String("user_id", userIDFlag),
+				slog.String("target_date", targetDateFlag),
 			))
 			continue
 		}
@@ -97,7 +115,7 @@ func main() {
 			DownloadedAt: now.Format(time.RFC3339),
 		},
 		Parameters: outParams{
-			TargetDate: *targetDateStr,
+			TargetDate: targetDateFlag,
 		},
 		Summaries: summariesMap,
 		ByDetails: details,
@@ -266,7 +284,7 @@ func uploadToGCS(ctx context.Context, bucketName string, targetDate *time.Time, 
 
 	bucket := client.Bucket(bucketName)
 
-	objectName := fmt.Sprintf("raw/%v_summary.json", targetDate.Format("2006_01_02"))
+	objectName := fmt.Sprintf("raw/%v/%v_summary.json", targetDate.Format("2006"), targetDate.Format("2006_01_02"))
 	wc := bucket.Object(objectName).NewWriter(ctx)
 	if _, err = io.Copy(wc, file); err != nil {
 		return fmt.Errorf("io.Copy: %v", err)
